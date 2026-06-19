@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BESS Benchmark Comparison</title>
+  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: #f0f2f7;
+      color: #1e2028;
+      display: flex; flex-direction: column; min-height: 100%;
+      overflow-y: auto;
+    }
+
+    /* ── header ── */
+    header {
+      padding: 14px 24px;
+      background: linear-gradient(130deg, #16002e 0%, #3b0f6e 60%, #5c2090 100%);
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.28);
+    }
+    header h1 { font-size: 1.05em; color: #fff; font-weight: 600; letter-spacing: 0.01em; }
+    header p  { font-size: 0.78em; color: rgba(255,255,255,0.58); margin-top: 3px; font-weight: 400; }
+
+    /* ── tab bar ── */
+    .tabs-bar {
+      display: flex; gap: 0;
+      padding: 0 20px;
+      background: white;
+      border-bottom: 2px solid #e4e8f0;
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      padding: 11px 20px;
+      border: none;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      background: transparent;
+      cursor: pointer;
+      font-size: 0.84em; font-family: inherit; font-weight: 500;
+      color: #6b7280;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover  { color: #7d3c98; }
+    .tab-btn.active { color: #7d3c98; border-bottom-color: #7d3c98; font-weight: 600; }
+
+    /* ── tab body — fixed height ── */
+    .body {
+      display: flex;
+      height: 58vh; min-height: 360px;
+      flex-shrink: 0;
+      background: white;
+      border-bottom: 1px solid #e4e8f0;
+    }
+
+    /* ── shared sidebar ── */
+    .sidebar {
+      width: 200px; min-width: 155px;
+      background: #f8f9fc;
+      border-right: 1px solid #e4e8f0;
+      overflow-y: auto;
+      padding: 12px 8px;
+      font-size: 0.82em;
+      display: none; flex-direction: column;
+    }
+    .sidebar.active { display: flex; }
+    .sidebar h2 {
+      font-size: 0.72em; font-weight: 700; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      margin-bottom: 10px; padding-left: 4px; flex-shrink: 0;
+    }
+    .grp { margin-bottom: 5px; border: 1px solid #e4e8f0; border-radius: 7px; overflow: hidden; }
+    .grp-hdr {
+      background: #f0f3f9; padding: 6px 10px; cursor: pointer;
+      user-select: none; font-weight: 600; font-size: 0.88em; color: #374151;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: background 0.12s;
+    }
+    .grp-hdr:hover { background: #e6ebf5; }
+    .arrow { font-size: 0.62em; margin-right: 4px; transition: transform .15s; color: #9ca3af; }
+    .grp-btns { font-weight: 400; font-size: 0.76em; white-space: nowrap; }
+    .grp-btns a {
+      cursor: pointer; color: #7d3c98; text-decoration: none;
+      margin-left: 6px; font-weight: 500;
+    }
+    .grp-btns a:hover { text-decoration: underline; }
+    .grp-body { padding: 5px 10px 7px; background: white; }
+    .grp-body label {
+      display: flex; align-items: center; gap: 6px; margin: 3px 0;
+      cursor: pointer; white-space: nowrap; color: #374151; font-size: 0.96em;
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── line chart tab panels ── */
+    .chart-area { flex: 1; min-width: 0; position: relative; }
+    .tab-panel { position: absolute; inset: 0; display: none; }
+    .tab-panel.active { display: block; }
+    .tab-panel > div { width: 100%; height: 100%; }
+
+    /* ── shared card base ── */
+    .avg-card, .ov-card {
+      margin: 12px;
+      background: white;
+      border: 1px solid #e4e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+      box-shadow: 0 1px 6px rgba(30,32,40,0.07);
+    }
+    .avg-card-header, .ov-card-header {
+      background: #f8f9fc;
+      border-bottom: 1px solid #e4e8f0;
+      padding: 10px 18px;
+      display: flex; align-items: center; gap: 16px;
+      flex-shrink: 0; flex-wrap: wrap;
+    }
+
+    /* ── annual average card ── */
+    .avg-card-title { font-weight: 600; font-size: 0.92em; color: #1e2028; }
+    .avg-period-ctl { display: flex; align-items: center; gap: 8px; font-size: 0.84em; color: #374151; }
+    .avg-period-ctl select {
+      padding: 4px 10px; font-size: 0.84em; font-family: inherit;
+      border: 1px solid #d1d5db; border-radius: 6px; background: white;
+      color: #1e2028; cursor: pointer;
+    }
+    .avg-hint { color: #9ca3af; font-size: 0.78em; margin-left: 4px; }
+    .avg-card-body { display: flex; flex: 1; }
+    #sidebar-avg {
+      width: 200px; min-width: 155px; background: #f8f9fc;
+      border-right: 1px solid #e4e8f0; overflow-y: auto;
+      padding: 12px 8px; font-size: 0.82em;
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    #sidebar-avg h2 {
+      font-size: 0.72em; font-weight: 700; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      margin-bottom: 10px; padding-left: 4px; flex-shrink: 0;
+    }
+    .avg-chart-outer { flex: 1; min-width: 0; position: relative; min-height: 460px; }
+    #chart-avg { position: absolute; inset: 0; }
+
+    /* ── overview context chart card ── */
+    .ov-title { font-weight: 600; font-size: 0.92em; color: #1e2028; white-space: nowrap; }
+    .ov-size-checks { display: flex; align-items: center; gap: 12px; font-size: 0.84em; }
+    .ov-size-checks > span { color: #6b7280; font-weight: 500; }
+    .ov-size-checks label { display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; color: #374151; }
+    .ov-hint { color: #9ca3af; font-size: 0.78em; margin-left: auto; white-space: nowrap; }
+    .ov-dur-ctl { display: flex; align-items: center; gap: 3px; background: #f0f3f9; border-radius: 7px; padding: 3px; }
+    .ov-dur-btn {
+      padding: 4px 14px; border: none; background: transparent;
+      cursor: pointer; font-size: 0.84em; font-family: inherit; font-weight: 500;
+      color: #6b7280; border-radius: 5px; transition: background 0.15s, color 0.15s;
+    }
+    .ov-dur-btn:hover  { color: #7d3c98; }
+    .ov-dur-btn.active { background: white; color: #7d3c98; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+    .ov-chart-outer { position: relative; height: 300px; }
+    #chart-ov { position: absolute; inset: 0; }
+
+    /* ── breakdown card ── */
+    .bd-chart-outer { position: relative; min-height: 500px; flex: 1; }
+    #chart-breakdown { position: absolute; inset: 0; }
+
+    /* ── benchmark methodology table ── */
+    .meta-card {
+      margin: 12px;
+      background: white;
+      border: 1px solid #e4e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+      flex-shrink: 0;
+      box-shadow: 0 1px 6px rgba(30,32,40,0.07);
+    }
+    .meta-card-header {
+      background: #f8f9fc;
+      border-bottom: 1px solid transparent;
+      padding: 10px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+      transition: background 0.15s;
+    }
+    .meta-card-header.open { border-bottom-color: #e4e8f0; }
+    .meta-card-header:hover { background: #eff1f8; }
+    .meta-title { font-weight: 600; font-size: 0.92em; color: #1e2028; }
+    .meta-toggle-label { font-size: 0.82em; color: #7d3c98; font-weight: 500; white-space: nowrap; }
+    .meta-body { display: none; overflow-x: auto; max-height: 380px; overflow-y: auto; }
+    .meta-table {
+      border-collapse: collapse; width: max-content; min-width: 100%;
+      font-size: 0.76em; font-family: inherit;
+    }
+    .meta-table thead tr {
+      background: linear-gradient(130deg, #16002e 0%, #3b0f6e 60%, #5c2090 100%);
+      position: sticky; top: 0; z-index: 2;
+    }
+    .meta-table th {
+      padding: 8px 11px; text-align: left; color: white;
+      font-weight: 600; border-right: 1px solid rgba(255,255,255,0.14);
+      line-height: 1.35; white-space: nowrap;
+    }
+    .meta-table th:last-child { border-right: none; }
+    .meta-table td {
+      padding: 7px 11px; border-bottom: 1px solid #f0f2f7;
+      border-right: 1px solid #f0f2f7; vertical-align: top;
+      white-space: nowrap; color: #374151;
+    }
+    .meta-table td:last-child { border-right: none; }
+    .meta-table tbody tr:last-child td { border-bottom: none; }
+    .meta-table tbody tr:hover td { background: rgba(0,0,0,0.04) !important; }
+    .meta-gridcog td { background: rgba(141,46,255,0.09); font-weight: 500; }
+    .meta-gridcog .meta-sticky { background: rgba(141,46,255,0.09); }
+    .meta-rwth td { background: rgba(255,77,26,0.09); }
+    .meta-rwth .meta-sticky { background: rgba(255,77,26,0.09); }
+    .meta-cleanhorizon td { background: rgba(247,109,202,0.09); }
+    .meta-cleanhorizon .meta-sticky { background: rgba(247,109,202,0.09); }
+    .meta-suena td { background: rgba(0,191,165,0.09); }
+    .meta-suena .meta-sticky { background: rgba(0,191,165,0.09); }
+    .meta-lcp td { background: rgba(0,143,122,0.09); }
+    .meta-lcp .meta-sticky { background: rgba(0,143,122,0.09); }
+    .meta-modo td { background: rgba(217,0,143,0.09); }
+    .meta-modo .meta-sticky { background: rgba(217,0,143,0.09); }
+    .meta-enspired td { background: rgba(255,138,92,0.09); }
+    .meta-enspired .meta-sticky { background: rgba(255,138,92,0.09); }
+    .meta-wrap { white-space: normal !important; min-width: 170px; max-width: 240px; line-height: 1.4; }
+    .meta-sticky {
+      position: sticky; left: 0; z-index: 1; background: white;
+      font-weight: 600; border-right: 2px solid #e4e8f0 !important;
+    }
+    .meta-table thead .meta-sticky {
+      background: #16002e !important; z-index: 3;
+      border-right-color: rgba(255,255,255,0.25) !important;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BESS Total Revenue Comparison — Gridcog vs Benchmarks (2025 only)</h1>
+    <p>All values in kEUR/MW/year &nbsp;&nbsp;&#9679; circle = 2h &nbsp;&nbsp;&#9650; triangle = 4h</p>
+  </header>
+
+  <!-- ── benchmark methodology table ── -->
+  <div class="meta-card">
+    <div class="meta-card-header" id="meta-header" onclick="toggleMeta()">
+      <span class="meta-title">Benchmark Methodology Comparison</span>
+      <span class="meta-toggle-label" id="meta-toggle-label">Show details &#9660;</span>
+    </div>
+    <div class="meta-body" id="meta-body">
+      <table class="meta-table">
+        <thead>
+          <tr>
+            <th class="meta-sticky">Benchmark</th>
+            <th>RTE</th>
+            <th>Cycling<br>limit</th>
+            <th>Duration</th>
+            <th>Size</th>
+            <th>Markets</th>
+            <th>Avail.</th>
+            <th>Foresight /<br>forecast</th>
+            <th>Cycling<br>costs</th>
+            <th>Churn<br>target %</th>
+            <th>Churn<br>threshold</th>
+            <th>FCR marketable<br>capacity</th>
+            <th>FCR<br>accept.</th>
+            <th>FCR<br>activ.</th>
+            <th>aFRR<br>accept.</th>
+            <th>aFRR<br>activ.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="meta-gridcog">
+            <td class="meta-sticky">Gridcog</td>
+            <td>85%</td>
+            <td>2 / day</td>
+            <td>2h, 4h</td>
+            <td>10, 20, 50 MW</td>
+            <td class="meta-wrap">DA, IDC, IDA, aFRR cap, aFRR en, FCR</td>
+            <td>100%</td>
+            <td class="meta-wrap">Imperfect foresight. DA perfect; IDA/IDC DEMA&nbsp;4; ancillary DEMA&nbsp;12</td>
+            <td>0.2</td>
+            <td>35%</td>
+            <td>5 &euro;/MWh</td>
+            <td>100%</td>
+            <td>50%</td>
+            <td>10%</td>
+            <td>80%</td>
+            <td>10%</td>
+          </tr>
+          <tr class="meta-rwth">
+            <td class="meta-sticky">RWTH</td>
+            <td>90.25%</td>
+            <td>2 / day</td>
+            <td>2h</td>
+            <td>1 MW</td>
+            <td class="meta-wrap">DA, IDA1, IDC, FCR, aFRR cap, aFRR en</td>
+            <td>100%</td>
+            <td class="meta-wrap">Imperfect foresight</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>20%</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+          </tr>
+          <tr class="meta-cleanhorizon">
+            <td class="meta-sticky">Cleanhorizon</td>
+            <td>85%</td>
+            <td>1.5 / day</td>
+            <td>2h, 4h</td>
+            <td>&mdash;</td>
+            <td class="meta-wrap">DA, ID, FCR, aFRR</td>
+            <td>100%</td>
+            <td class="meta-wrap">Perfect DA/D-1 auctions; statistical aFRR/mFRR energy</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+          </tr>
+          <tr class="meta-suena">
+            <td class="meta-sticky">Suena</td>
+            <td>Not stated</td>
+            <td>~2 / day</td>
+            <td>2h</td>
+            <td>10 MW</td>
+            <td class="meta-wrap">DA, IDA, IDC, FCR, aFRR cap, aFRR en</td>
+            <td>&mdash;</td>
+            <td class="meta-wrap">Imperfect foresight</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+          </tr>
+          <tr class="meta-lcp">
+            <td class="meta-sticky">LCP Delta</td>
+            <td>Not stated</td>
+            <td>2 / day</td>
+            <td>2h, 4h</td>
+            <td>10, 20, 50 MW</td>
+            <td class="meta-wrap">DA, IDA, IDC, FCR, aFRR cap, aFRR en</td>
+            <td>100%</td>
+            <td class="meta-wrap">Imperfect</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+          </tr>
+          <tr class="meta-modo">
+            <td class="meta-sticky">Modo</td>
+            <td>88%</td>
+            <td>1.5 / day</td>
+            <td>2h, 4h</td>
+            <td>50 MW</td>
+            <td class="meta-wrap">DA, IDA, IDC, FCR, aFRR</td>
+            <td>100%</td>
+            <td class="meta-wrap">Imperfect</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+          </tr>
+          <tr class="meta-enspired">
+            <td class="meta-sticky">Enspired</td>
+            <td>Real asset</td>
+            <td class="meta-wrap">1.26 / day realised</td>
+            <td class="meta-wrap">2h (1.51&ndash;2.5h band)</td>
+            <td>Real portfolio</td>
+            <td class="meta-wrap">DA, ID, FCR, aFRR (cross-mkt)</td>
+            <td>&mdash;</td>
+            <td class="meta-wrap">Real portfolio</td>
+            <td>Real</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+            <td>&mdash;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── overview context chart ── -->
+  <div class="ov-card">
+    <div class="ov-card-header">
+      <span class="ov-title">Gridcog vs Benchmark Range (Total)</span>
+      <div class="ov-size-checks">
+        <span>Show size:</span>
+          <label><input type="checkbox" checked data-mw="10" onchange="toggleOvSize('10',this)"><span class="dot" style="background:#B575FF"></span>10MW</label>
+          <label><input type="checkbox" data-mw="20" onchange="toggleOvSize('20',this)"><span class="dot" style="background:#8D2EFF"></span>20MW</label>
+          <label><input type="checkbox" data-mw="50" onchange="toggleOvSize('50',this)"><span class="dot" style="background:#5A1B99"></span>50MW</label>
+      </div>
+      <div class="ov-dur-ctl">
+        <button class="ov-dur-btn active" onclick="switchOvDuration('2h',this)">2h</button>
+        <button class="ov-dur-btn"        onclick="switchOvDuration('4h',this)">4h</button>
+      </div>
+      <span class="ov-hint">Grey band = per-month min/max across benchmarks &nbsp;|&nbsp; &#9650;&nbsp;= 4h &nbsp;&#9679;&nbsp;= 2h</span>
+    </div>
+    <div class="ov-chart-outer">
+      <div id="chart-ov"></div>
+    </div>
+  </div>
+
+  <div class="tabs-bar">
+    <button class="tab-btn active" onclick="showTab('tab-2h','chart-2h','sidebar-2h',this)">Total — 2h</button>
+    <button class="tab-btn"        onclick="showTab('tab-4h','chart-4h','sidebar-4h',this)">Total — 4h</button>
+    <button class="tab-btn"        onclick="showTab('tab-ws','chart-ws','sidebar-ws',this)">Wholesale</button>
+    <button class="tab-btn"        onclick="showTab('tab-an','chart-an','sidebar-an',this)">Ancillary</button>
+  </div>
+
+  <!-- ── line chart section ── -->
+  <div class="body">
+    <div id="sidebar-2h" class="sidebar active"><h2>Scenarios</h2>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Gridcog
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-2h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-2h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 10MW 2h"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#B575FF"></span>
+          10 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 20MW 2h"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#8D2EFF"></span>
+          20 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 50MW 2h"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#5A1B99"></span>
+          50 MW · 2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Cleanhorizon
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-2h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-2h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Cleanhorizon 2h"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#F76DCA"></span>
+          2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Enspired
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-2h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-2h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Enspired 2h"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#FF8A5C"></span>
+          2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> LCP Delta
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-2h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-2h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP_Delta 2h 20 MW"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#008F7A"></span>
+          20 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP_Delta 2h 50 MW"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#008F7A"></span>
+          50 MW · 2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Modo
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-2h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-2h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Modo 2h 50 MW"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#D9008F"></span>
+          50 MW · 2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> RWTH Aachen
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-2h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-2h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="RWTH_Aachen 2h 1 MW"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#FF4D1A"></span>
+          1 MW · 2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Suena
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-2h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-2h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Suena 2h 10 MW"
+            onchange="toggleTrace(this, 'chart-2h')">
+          <span class="dot" style="background:#00BFA5"></span>
+          10 MW · 2h
+        </label>
+      </div>
+    </div></div>
+    <div id="sidebar-4h" class="sidebar">        <h2>Scenarios</h2>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Gridcog
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-4h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-4h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 10MW 4h"
+            onchange="toggleTrace(this, 'chart-4h')">
+          <span class="dot" style="background:#B575FF"></span>
+          10 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 20MW 4h"
+            onchange="toggleTrace(this, 'chart-4h')">
+          <span class="dot" style="background:#8D2EFF"></span>
+          20 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 50MW 4h"
+            onchange="toggleTrace(this, 'chart-4h')">
+          <span class="dot" style="background:#5A1B99"></span>
+          50 MW · 4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Cleanhorizon
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-4h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-4h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Cleanhorizon 4h"
+            onchange="toggleTrace(this, 'chart-4h')">
+          <span class="dot" style="background:#F76DCA"></span>
+          4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> LCP Delta
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-4h',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-4h',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP_Delta 4h 20 MW"
+            onchange="toggleTrace(this, 'chart-4h')">
+          <span class="dot" style="background:#008F7A"></span>
+          20 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP_Delta 4h 50 MW"
+            onchange="toggleTrace(this, 'chart-4h')">
+          <span class="dot" style="background:#008F7A"></span>
+          50 MW · 4h
+        </label>
+      </div>
+    </div></div>
+    <div id="sidebar-ws" class="sidebar">        <h2>Scenarios</h2>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Gridcog
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-ws',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-ws',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 10 MW 2h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#B575FF"></span>
+          10 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 20 MW 2h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#8D2EFF"></span>
+          20 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 10 MW 4h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#B575FF"></span>
+          10 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 20 MW 4h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#8D2EFF"></span>
+          20 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 50 MW 2h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#5A1B99"></span>
+          50 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 50 MW 4h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#5A1B99"></span>
+          50 MW · 4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> LCP Delta
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-ws',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-ws',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP Delta 20 MW 2h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#008F7A"></span>
+          20 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP Delta 50 MW 2h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#008F7A"></span>
+          50 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="LCP Delta 20 MW 4h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#008F7A"></span>
+          20 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="LCP Delta 50 MW 4h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#008F7A"></span>
+          50 MW · 4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Modo
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-ws',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-ws',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Modo 50 MW 2h"
+            onchange="toggleTrace(this, 'chart-ws')">
+          <span class="dot" style="background:#D9008F"></span>
+          50 MW · 2h
+        </label>
+      </div>
+    </div></div>
+    <div id="sidebar-an" class="sidebar">        <h2>Scenarios</h2>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Gridcog
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-an',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-an',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 10 MW 2h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#B575FF"></span>
+          10 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 20 MW 2h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#8D2EFF"></span>
+          20 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 10 MW 4h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#B575FF"></span>
+          10 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 20 MW 4h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#8D2EFF"></span>
+          20 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 50 MW 2h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#5A1B99"></span>
+          50 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 50 MW 4h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#5A1B99"></span>
+          50 MW · 4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> LCP Delta
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-an',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-an',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP Delta 20 MW 2h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#008F7A"></span>
+          20 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP Delta 50 MW 2h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#008F7A"></span>
+          50 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="LCP Delta 20 MW 4h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#008F7A"></span>
+          20 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="LCP Delta 50 MW 4h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#008F7A"></span>
+          50 MW · 4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Modo
+        <span class="grp-btns">
+          <a onclick="setGrp(event,this,'chart-an',true)">all</a>
+          <a onclick="setGrp(event,this,'chart-an',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Modo 50 MW 2h"
+            onchange="toggleTrace(this, 'chart-an')">
+          <span class="dot" style="background:#D9008F"></span>
+          50 MW · 2h
+        </label>
+      </div>
+    </div></div>
+    <div class="chart-area">
+      <div id="tab-2h" class="tab-panel active"><div id="chart-2h"></div></div>
+      <div id="tab-4h" class="tab-panel">        <div id="chart-4h"></div></div>
+      <div id="tab-ws" class="tab-panel">        <div id="chart-ws"></div></div>
+      <div id="tab-an" class="tab-panel">        <div id="chart-an"></div></div>
+    </div>
+  </div>
+
+  <!-- ── annual average card ── -->
+  <div class="avg-card">
+    <div class="avg-card-header">
+      <span class="avg-card-title">Annual Average Cashflow</span>
+      <div class="avg-period-ctl">
+        <label for="avg-period-sel">Period:</label>
+        <select id="avg-period-sel" onchange="switchAvgPeriod(this.value)">
+          <option value="2025">2025 (full year)</option>
+          <option value="past12">Past 12 months</option>
+        </select>
+        <span class="avg-hint">Solid bars = 2h &nbsp;|&nbsp; Hatched bars = 4h</span>
+      </div>
+    </div>
+    <div class="avg-card-body">
+      <div id="sidebar-avg">
+        <h2>Scenarios</h2>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Gridcog
+        <span class="grp-btns">
+          <a onclick="setGrpBar(event,this,'chart-avg',true)">all</a>
+          <a onclick="setGrpBar(event,this,'chart-avg',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 10MW 2h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#B575FF"></span>
+          10 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 20MW 2h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#8D2EFF"></span>
+          20 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 10MW 4h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#B575FF"></span>
+          10 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 20MW 4h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#8D2EFF"></span>
+          20 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="Gridcog 50MW 2h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#5A1B99"></span>
+          50 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Gridcog 50MW 4h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#5A1B99"></span>
+          50 MW · 4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Cleanhorizon
+        <span class="grp-btns">
+          <a onclick="setGrpBar(event,this,'chart-avg',true)">all</a>
+          <a onclick="setGrpBar(event,this,'chart-avg',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Cleanhorizon 2h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#F76DCA"></span>
+          2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="Cleanhorizon 4h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#F76DCA"></span>
+          4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Enspired
+        <span class="grp-btns">
+          <a onclick="setGrpBar(event,this,'chart-avg',true)">all</a>
+          <a onclick="setGrpBar(event,this,'chart-avg',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Enspired 2h"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#FF8A5C"></span>
+          2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> LCP Delta
+        <span class="grp-btns">
+          <a onclick="setGrpBar(event,this,'chart-avg',true)">all</a>
+          <a onclick="setGrpBar(event,this,'chart-avg',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP_Delta 2h 20 MW"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#008F7A"></span>
+          20 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" checked
+            data-label="LCP_Delta 2h 50 MW"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#008F7A"></span>
+          50 MW · 2h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="LCP_Delta 4h 20 MW"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#008F7A"></span>
+          20 MW · 4h
+        </label>
+        <label>
+          <input type="checkbox" 
+            data-label="LCP_Delta 4h 50 MW"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#008F7A"></span>
+          50 MW · 4h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Modo
+        <span class="grp-btns">
+          <a onclick="setGrpBar(event,this,'chart-avg',true)">all</a>
+          <a onclick="setGrpBar(event,this,'chart-avg',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Modo 2h 50 MW"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#D9008F"></span>
+          50 MW · 2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> RWTH Aachen
+        <span class="grp-btns">
+          <a onclick="setGrpBar(event,this,'chart-avg',true)">all</a>
+          <a onclick="setGrpBar(event,this,'chart-avg',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="RWTH_Aachen 2h 1 MW"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#FF4D1A"></span>
+          1 MW · 2h
+        </label>
+      </div>
+    </div>
+    <div class="grp">
+      <div class="grp-hdr" onclick="toggleGrpCollapse(this)">
+        <span class="arrow">&#9660;</span> Suena
+        <span class="grp-btns">
+          <a onclick="setGrpBar(event,this,'chart-avg',true)">all</a>
+          <a onclick="setGrpBar(event,this,'chart-avg',false)">none</a>
+        </span>
+      </div>
+      <div class="grp-body">
+        <label>
+          <input type="checkbox" checked
+            data-label="Suena 2h 10 MW"
+            onchange="toggleBar(this, 'chart-avg')">
+          <span class="dot" style="background:#00BFA5"></span>
+          10 MW · 2h
+        </label>
+      </div>
+    </div>
+      </div>
+      <div class="avg-chart-outer">
+        <div id="chart-avg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Gridcog breakdown card ── -->
+  <div class="avg-card">
+    <div class="avg-card-header">
+      <span class="avg-card-title">Gridcog Cashflow Breakdown by Battery Configuration</span>
+      <div class="avg-period-ctl">
+        <label for="bd-scenario-sel">Configuration:</label>
+        <select id="bd-scenario-sel" onchange="switchBreakdown(this.value); switchMarketShare(this.value)">
+        <option value="bd_20000_2">10 MW — 2h</option>
+        <option value="bd_40000_2">20 MW — 2h</option>
+        <option value="bd_100000_2">50 MW — 2h</option>
+        <option value="bd_40000_4">10 MW — 4h</option>
+        <option value="bd_80000_4">20 MW — 4h</option>
+        <option value="bd_200000_4">50 MW — 4h</option>
+        </select>
+      </div>
+      <span class="avg-hint">Stacked bars = monthly cashflow (€/MW, left axis) &nbsp;|&nbsp; Black line = annualised total (kEUR/MW/yr, right axis)</span>
+    </div>
+    <div class="bd-chart-outer">
+      <div id="chart-breakdown"></div>
+    </div>
+  </div>
+
+  
+  <!-- ── Market Share Chart ── -->
+  <div class="avg-card" style="margin-top:20px;">
+    <div class="avg-card-header">
+      <span class="avg-card-title">Revenue Mix by Market &#8212; % of Total Cashflow</span>
+      <span class="avg-hint">Net inflows &amp; outflows per market summed; negative nets clipped to 0 &nbsp;|&nbsp; configuration follows the selector above</span>
+    </div>
+    <div style="width:100%; height:420px; position:relative;">
+      <div id="chart-ms" style="position:absolute;inset:0;"></div>
+    </div>
+  </div>
+
+  <script>
+    var layout    = {"xaxis":{"title":"Month","tickangle":-45,"showgrid":true,"gridcolor":"#eee"},"yaxis":{"title":"kEUR / MW / year","showgrid":true,"gridcolor":"#eee","zeroline":true},"hovermode":"x unified","plot_bgcolor":"white","paper_bgcolor":"white","font":{"family":"Arial","size":12},"margin":{"l":70,"r":20,"t":20,"b":80}};
+    var avgLayout = {"barmode":"group","xaxis":{"showgrid":false,"tickangle":-45,"automargin":true},"yaxis":{"title":"kEUR / MW / year","showgrid":true,"gridcolor":"#eee","zeroline":true,"rangemode":"tozero"},"hovermode":"x","plot_bgcolor":"white","paper_bgcolor":"white","font":{"family":"Arial","size":12},"margin":{"l":60,"r":20,"t":40,"b":20}};
+    var ovLayout  = {"xaxis":{"title":"","tickangle":-45,"showgrid":true,"gridcolor":"#eee"},"yaxis":{"title":"kEUR / MW / year","showgrid":true,"gridcolor":"#eee","zeroline":true},"hovermode":"x unified","plot_bgcolor":"white","paper_bgcolor":"white","font":{"family":"Arial","size":12},"margin":{"l":70,"r":20,"t":10,"b":80},"showlegend":true,"legend":{"orientation":"h","xanchor":"left","x":0,"y":1.12,"font":{"size":11}}};
+    var bdLayout  = {"barmode":"relative","legend":{"groupclick":"toggleitem","orientation":"v","x":1.06,"y":1,"xanchor":"left","font":{"size":11}},"xaxis":{"tickangle":-45,"showgrid":false,"zeroline":false},"yaxis":{"title":"\u20ac/MW","showgrid":true,"gridcolor":"#eee","zeroline":true,"zerolinecolor":"#d1d5db","zerolinewidth":1.5},"yaxis2":{"title":"kEUR/MW/year","overlaying":"y","side":"right","showgrid":false,"zeroline":false,"tickfont":{"color":"#374151"},"title_font":{"color":"#374151"}},"hovermode":"x unified","plot_bgcolor":"white","paper_bgcolor":"white","font":{"family":"Inter, Arial, sans-serif","size":12},"margin":{"l":70,"r":110,"t":10,"b":80}};
+    var config    = {responsive: true};
+    var OV_DATA   = {'2h': [{"type":"scatter","mode":"lines","name":"Benchmark lower","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[111.0,128.44596,190.9,206.0,295.4,276.0,196.74156,221.82672,342.0,265.0,143.0,96.5088],"line":{"color":"rgba(160,160,160,0.5)","width":0.8,"shape":"spline","smoothing":0.8},"connectgaps":true,"legendgroup":"band","showlegend":false,"hovertemplate":"Lower bound: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines","name":"Benchmark range","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[259.2,222.0,259.2863493261752,338.4,421.2,379.2,230.4,250.8,398.6714425922828,347.0,209.0,203.0],"line":{"color":"rgba(160,160,160,0.5)","width":0.8,"shape":"spline","smoothing":0.8},"fill":"tonexty","fillcolor":"rgba(190,190,190,0.3)","connectgaps":true,"legendgroup":"band","showlegend":true,"hovertemplate":"Upper bound: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 10MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[169.8863870148,135.85595415240002,186.7788355692,255.2502982248,324.56227237679997,331.5569421672,197.94848064480001,209.96956032120002,379.05352772520007,290.87627668320005,152.0437034196,92.8891945704],"line":{"color":"#B575FF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#B575FF","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog 10MW","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 10MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 20MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[172.3133091534,136.9028105076,191.07262750980001,259.684022457,326.68686600060005,330.71782689839995,200.38406001600003,211.78131726719997,380.7295659678,295.20495134399994,153.83781724859998,92.496132468],"line":{"color":"#8D2EFF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#8D2EFF","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog 20MW","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 20MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 50MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[171.57042809087997,138.22180966272,188.97230681952,258.7492883568,328.0376427986401,334.9968450672,202.74580020168,215.68807010280003,384.3612351216,298.94433011952003,153.99888172752,93.22059430944002],"line":{"color":"#5A1B99","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#5A1B99","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog 50MW","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 50MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"}], '4h': [{"type":"scatter","mode":"lines","name":"Benchmark lower","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[159.0,147.65279999999998,250.99668,253.0,359.0,324.0,230.88972,267.98568,397.48824,305.79192,173.98896,116.0286],"line":{"color":"rgba(160,160,160,0.5)","width":0.8,"shape":"spline","smoothing":0.8},"connectgaps":true,"legendgroup":"band","showlegend":false,"hovertemplate":"Lower bound: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines","name":"Benchmark range","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[219.08592,170.0,277.04448,326.32176,417.49404,384.44496,291.0,300.0,431.76336,424.0,265.0,255.0],"line":{"color":"rgba(160,160,160,0.5)","width":0.8,"shape":"spline","smoothing":0.8},"fill":"tonexty","fillcolor":"rgba(190,190,190,0.3)","connectgaps":true,"legendgroup":"band","showlegend":true,"hovertemplate":"Upper bound: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 10MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[208.80110783039996,158.58824026559998,252.25481415120007,320.2611963468,396.15912479639996,409.6341962963999,242.86321621439998,261.4260300828,463.52933018999994,353.4342591636,189.5690358852,111.95171265120001],"line":{"color":"#B575FF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#B575FF","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog 10MW","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 10MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 20MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[210.33537349259998,158.2946808306,253.09245566159998,322.4324595047999,398.5577348562,409.4729865396,242.9365487238,261.614138343,465.4252005552,355.32250657979995,190.8635360208,113.41358737859998],"line":{"color":"#8D2EFF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#8D2EFF","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog 20MW","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 20MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 50MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[211.8883612236,157.66266696552003,252.68316828576,322.67925844584,398.67001159344005,411.51233844288,243.93697315872,260.73239598168004,463.98403311887995,355.78736151696,190.83062698896003,114.27558279360001],"line":{"color":"#5A1B99","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#5A1B99","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog 50MW","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 50MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"}]};
+    var BD_DATA   = {"bd_20000_2":[{"type":"bar","name":"Act. aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-808.6738823,-1043.1130228,-743.5565418,-1008.7327195,-1440.7902828,-1148.8240443999998,-1806.6599208,-1587.8391451,-1443.5867275,-1481.3266324,-1860.4291324,-1063.6575366],"marker":{"color":"#DDC2FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"Act. aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5660.5108568000005,5146.4560376,2610.3008978999997,2077.6362793,2147.8819787,1776.8163558,1860.819698,1697.4330346,2344.7797987999998,3177.1292664000002,3589.3972012,3042.8749333],"marker":{"color":"#B575FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"FCR Sym.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,14.112,36.176,34.384,104.112,0.0,0.0,60.864,0.0,0.0,0.0,17.6],"marker":{"color":"#8D2EFF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[1538.24,511.264,3797.6,8324.208,15205.616,14544.192000000001,8273.288,8520.712,10447.152,6153.408,2145.912,654.952],"marker":{"color":"#A7F0E4"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4937.8279999999995,5737.772,2812.08,4055.5199999999995,5720.64,5830.464,4965.552,4366.616,14782.439999999999,14578.8,7626.911999999999,5031.023999999999],"marker":{"color":"#00BFA5"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[3118.8695923,2605.4308747,4213.7593769,4154.311449700001,1457.3803698,1709.9324771,1330.5035269,2763.0376552000002,3490.9988892,1840.6901475999998,2940.2727844,2612.8319352],"marker":{"color":"#2E5BFF"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[3344.2915896,2498.9392226,3692.1516787,2013.8669512000001,1452.6373259,1132.5985624,1814.9248056000001,2542.2724322,1303.3977925,1318.2750607,2005.0543178,953.5203013],"marker":{"color":"#0C1C73"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4205.5149985,3838.2807544,5058.6490956,3869.1643802,2516.8128944,6639.1871992,3855.4009299,2431.7555938,4551.7733793,1844.0054016999998,1828.3050506,1991.8950127],"marker":{"color":"#5CEAD0"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[25.9977867,38.6390726,63.728137700000005,56.7275718,66.8077203,46.4287548,47.518472700000004,38.515220799999994,67.8946256,24.317006,3.4559390999999997,6.3738472999999995],"marker":{"color":"#1B7F5B"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[875.1004149,722.7118421,648.6061918,645.8346654,843.6752676,616.3624053,501.7077963,474.7616399,666.2151467,545.7047095,445.7031333,359.72819020000003],"marker":{"color":"#008F7A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-3197.303924,-1881.1244869999998,-1901.2408103000002,-1071.8816575,-515.212901,-1655.5146981999999,-1371.5523084000001,-1347.3001249000001,-1468.5730253,-1769.6479952999998,-1835.3640341999999,-1680.4846484000002],"marker":{"color":"#FF8C00"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-1878.3105101,-2350.2379690999996,-1960.5998089,-953.0585927,-620.5826999,-1349.2344649000001,-1427.4813953,-1340.6216589,-1664.1843450000001,-1150.1753091,-1504.5560258,-1530.1917028],"marker":{"color":"#FFC300"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-4346.1652646,-4994.8592969,-3478.3539028,-1679.0743057,-651.9358251,-1162.7022805000001,-2131.6160822,-1776.9595869,-2357.4154922999996,-1330.8932346,-3138.0575514,-2956.2990546],"marker":{"color":"#FF4D1A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[98.8218822,63.3307765,121.8938264,102.1786989,25.4892144,44.2433724,39.646518,74.5047503,65.1303889,16.256875700000002,33.149186400000005,10.149650099999999],"marker":{"color":"#D9008F"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[582.4773779,413.727708,593.7088229,649.7734643,734.3249691,605.7955416,543.6546797,579.7115491,801.7715462,473.1464274,390.5537493,290.4492865],"marker":{"color":"#7C8BA1"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"scatter","mode":"lines+markers","name":"Total (annualised)","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[169.8863870148,135.85595415240002,186.7788355692,255.2502982248,324.56227237679997,331.5569421672,197.94848064480001,209.96956032120002,379.05352772520007,290.87627668320005,152.0437034196,92.8891945704],"line":{"color":"#1e2028","width":2.5,"shape":"spline","smoothing":0.8},"marker":{"color":"#1e2028","size":7},"legendgroup":"Total","legendgrouptitle":{"text":"Total"},"hovertemplate":"%{x}<br>Total annualised: %{y:,.1f} kEUR/MW/yr<extra></extra>","xaxis":"x","yaxis":"y2"}],"bd_40000_2":[{"type":"bar","name":"Act. aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-906.4795258500001,-1072.80909105,-744.5628163499999,-993.0551353000001,-1396.08504795,-1088.6689167,-1832.8344564,-1658.0090464,-1471.6541513,-1583.2980163,-2003.2664897999998,-1082.76763565],"marker":{"color":"#DDC2FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"Act. aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5743.7347856,5455.251206800001,2702.3358574999997,2308.0798662,2201.1753563499997,1675.12280865,1888.2852592,1795.7997048000002,2436.8143391500003,3269.9654161,3708.8289525,3099.82220615],"marker":{"color":"#B575FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"FCR Sym.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,15.12,38.760000000000005,28.784,64.536,18.432,13.831999999999999,10.296,0.0,0.0,0.0,14.544],"marker":{"color":"#8D2EFF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[1570.072,498.88800000000003,4000.4480000000003,8417.736,15086.168,14460.384,8371.744,8655.752,10333.792,6331.956,2255.542,656.9939999999999],"marker":{"color":"#A7F0E4"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5028.294,5923.254,3040.652,4394.496,5804.408,5410.8,5044.2,4559.664,14972.816,15000.746,7761.454,5056.592],"marker":{"color":"#00BFA5"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[3019.2036298499997,2577.0277053,3752.6956587,3984.93769245,1548.2132876,2016.3136869999998,1292.20750455,2648.33177115,3494.00316255,1681.3192161499999,2777.33426135,2705.1276359],"marker":{"color":"#2E5BFF"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[3305.207039,2142.9530554000003,3681.2559196499997,2199.1837745000003,1393.71565025,1184.90676865,1723.4206093500002,2469.69133595,1223.8291711,1049.3880766500001,1980.1082921500001,910.7540519500001],"marker":{"color":"#0C1C73"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4308.18353155,3509.1531507500003,4934.52574575,3963.2808611,2977.34735775,6763.52234,3837.5872772000002,2374.8349945,4576.7255287,1667.8751367,1749.0086698999999,1900.5569332999999],"marker":{"color":"#5CEAD0"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[23.93575075,39.3071658,56.8927357,57.35980405,87.5443098,44.930819400000004,44.4045409,34.627437400000005,73.65495435,24.1398458,3.4559390999999997,5.8966584],"marker":{"color":"#1B7F5B"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[920.63743855,643.61418005,669.589431,602.0346554,800.81169545,597.4867572,548.5103749,530.90331315,685.8560731499999,493.865314,439.9705594,299.1093413],"marker":{"color":"#008F7A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-3232.04391475,-1642.0140588,-1905.5921079,-1192.87813,-796.0870538,-1845.318738,-1369.9280784500002,-1440.73263065,-1695.8744300499998,-1521.7558165,-1767.77431765,-1732.8059893000002],"marker":{"color":"#FF8C00"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-1834.49564345,-2176.7341981500003,-1997.0505754,-946.9544592,-398.34532694999996,-1328.16445425,-1379.52476515,-1325.94253775,-1683.68458425,-1164.8463791,-1485.66452515,-1493.3319843499999],"marker":{"color":"#FFC300"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-4253.78591805,-5002.64213275,-2994.46366045,-1907.4932454999998,-867.9175399,-1023.79738075,-2094.0727476,-1634.9240121500002,-2113.15388565,-1157.68877605,-3008.9041813,-2938.31714295],"marker":{"color":"#FF4D1A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[92.3658454,54.8295793,84.1494509,103.53879305000001,29.5786417,58.71735295,37.939006899999995,77.66919915,64.00191755,16.0765009,35.53044875,10.32178],"marker":{"color":"#D9008F"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[574.61341085,443.36897964999997,603.08332005,621.284728,688.84216975,615.1518640500001,572.9011426,550.48157645,830.33773535,492.67009365,374.1944948,295.51518425],"marker":{"color":"#7C8BA1"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"scatter","mode":"lines+markers","name":"Total (annualised)","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[172.3133091534,136.9028105076,191.07262750980001,259.684022457,326.68686600060005,330.71782689839995,200.38406001600003,211.78131726719997,380.7295659678,295.20495134399994,153.83781724859998,92.496132468],"line":{"color":"#1e2028","width":2.5,"shape":"spline","smoothing":0.8},"marker":{"color":"#1e2028","size":7},"legendgroup":"Total","legendgrouptitle":{"text":"Total"},"hovertemplate":"%{x}<br>Total annualised: %{y:,.1f} kEUR/MW/yr<extra></extra>","xaxis":"x","yaxis":"y2"}],"bd_100000_2":[{"type":"bar","name":"Act. aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-803.3119082000001,-1003.59107074,-688.38250174,-955.46767806,-1405.47087152,-1053.47543092,-1869.20949182,-1626.0626649,-1560.2652442400001,-1538.2568402,-1974.47133522,-1094.0099365800002],"marker":{"color":"#DDC2FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"Act. aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5827.45587244,5462.964553340001,2611.60467604,2120.82979854,2083.707602,1779.77739404,1951.6392066800001,1733.86614714,2385.2146156,3248.30792702,3629.6091471600002,3066.9947102200003],"marker":{"color":"#B575FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"FCR Sym.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.0,0.0,0.0,72.97279999999999,0.0,0.0,10.8576,0.0,33.2704,0.0,26.7136],"marker":{"color":"#8D2EFF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[1688.1951999999999,479.73036379999996,3988.0352000000003,8453.0528,15308.028799999998,14411.4016,8540.436800000001,8892.728000000001,10663.468799999999,6401.2832,2275.3616,665.768],"marker":{"color":"#A7F0E4"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4991.468,5944.7576,2780.072,4291.248,5776.969599999999,5916.831999999999,5144.5664,4501.5104,14741.8752,14882.9176,7785.0536,5053.92],"marker":{"color":"#00BFA5"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[3145.09019796,2574.24855686,4176.9816998,3728.94933074,1732.57055108,1726.63489824,1479.4877366599999,2502.65512664,3733.13994686,1831.47307,2781.49813968,2560.97448366],"marker":{"color":"#2E5BFF"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[3285.3244210599996,1987.5738474,3791.5398566,2267.4617887,1510.9628838400001,1161.53296268,1631.2314861,2524.95791876,1385.7589360000002,1189.6337896,1894.71658658,994.3315909600001],"marker":{"color":"#0C1C73"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[3878.28615438,3896.83297968,4759.55732678,3926.44235676,2795.1880889,6491.770487639999,3834.7054015800004,2574.79430288,4534.081507819999,1680.9734131799999,1679.28205296,1960.4563452],"marker":{"color":"#5CEAD0"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[31.218141099999997,44.76788654,54.3038285,67.88335424,72.22401662,51.37348932,48.41510636,27.75582284,59.28486402000001,23.146843720000003,4.40188394,6.77192624],"marker":{"color":"#1B7F5B"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[885.66170046,772.72701916,648.47661328,685.60843714,822.4878062,590.57417424,523.27372792,521.26126514,626.1082633000001,548.90662402,406.52552693999996,315.64361986],"marker":{"color":"#008F7A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-3315.5539425999996,-1920.31821574,-1923.31720798,-1030.00758558,-606.5052343,-1698.1390093199998,-1424.8340261600001,-1345.23591502,-1668.3568006399998,-1493.7743958400001,-1570.6298671,-1689.01211472],"marker":{"color":"#FF8C00"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-1930.22264278,-2227.70647332,-1777.4521756200002,-1127.71533168,-679.0805534799999,-1158.62042038,-1443.4867407000002,-1473.8914789799999,-1524.45714328,-1166.8864174799999,-1445.4321829399998,-1471.49311074],"marker":{"color":"#FFC300"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-4024.38159872,-4993.8633346,-3457.7007503,-1646.4170211,-837.87706418,-1056.62965962,-2154.80771906,-1570.43011,-2181.48681166,-1265.3712265000001,-3089.16740272,-2927.9064254799996],"marker":{"color":"#FF4D1A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[81.79875528,56.0001268,102.09649952,99.53109909999999,21.53446616,55.9074189,39.79805696,58.158301,59.36133382,15.28663826,28.001043359999997,10.10245324],"marker":{"color":"#D9008F"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[556.50732386,444.36029938,681.87717008,681.0413476,668.7573419,697.46385078,594.26740562,641.0811264,776.3754592,521.1168841799999,428.49135132000004,289.12771726],"marker":{"color":"#7C8BA1"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"scatter","mode":"lines+markers","name":"Total (annualised)","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[171.57042809087997,138.22180966272,188.97230681952,258.7492883568,328.0376427986401,334.9968450672,202.74580020168,215.68807010280003,384.3612351216,298.94433011952003,153.99888172752,93.22059430944002],"line":{"color":"#1e2028","width":2.5,"shape":"spline","smoothing":0.8},"marker":{"color":"#1e2028","size":7},"legendgroup":"Total","legendgrouptitle":{"text":"Total"},"hovertemplate":"%{x}<br>Total annualised: %{y:,.1f} kEUR/MW/yr<extra></extra>","xaxis":"x","yaxis":"y2"}],"bd_40000_4":[{"type":"bar","name":"Act. aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-1293.6266132,-1252.8512598,-926.6076676999999,-893.1610742,-1482.5947131,-894.5406319,-2143.7710002,-1823.5260624999999,-1730.4176856999998,-2857.7918751,-2781.2055936,-1609.3846478],"marker":{"color":"#DDC2FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"Act. aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5921.9765578,4129.5866816,2600.3862357999997,2450.8607795,2946.0852997,2087.1669903,2440.7136901999997,2121.4846946999996,2708.0231989,3460.2978079,3583.8221215999997,3015.6316659],"marker":{"color":"#B575FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"FCR Sym.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,20.16,46.512,0.0,89.6,0.0,0.0,94.96000000000001,0.0,0.0,0.0,22.4],"marker":{"color":"#8D2EFF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[1695.1680000000001,520.848,3146.112,7153.056,13831.12,12994.655999999999,7870.719999999999,7508.032000000001,11930.16,8464.832,3299.112,798.52],"marker":{"color":"#A7F0E4"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4552.280000000001,4519.864,2444.224,5134.464,8460.64,7298.4800000000005,6431.568,5461.616,16105.039999999999,14953.328,7506.608,4557.7919999999995],"marker":{"color":"#00BFA5"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4834.3797687999995,7060.278783299999,8107.5508058000005,6244.4793142,3366.3700876000003,3881.7097507999997,2346.8174181,4438.5228752,7253.4102799,4230.3869849,4448.92907,4445.0098106],"marker":{"color":"#2E5BFF"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5507.662168,5126.0607788,7322.5711044,3945.6765788,2119.8848831,2394.9435192,2756.9885108999997,4398.827627000001,1551.483786,2255.9758965,3287.6024548,1596.6228722],"marker":{"color":"#0C1C73"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[7201.3083750999995,6803.2067526,7910.079556300001,6701.5269584,5193.5030236,9301.241129400001,5416.1942853,3449.9608056999996,7362.4430011,2549.7004165,2925.1221997000002,4203.4527812],"marker":{"color":"#5CEAD0"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[66.4653867,77.4637085,114.0441944,102.6535534,98.7293775,73.6336909,66.9935196,63.250014799999995,114.32131890000001,41.2001427,8.4631158,17.574418],"marker":{"color":"#1B7F5B"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[719.0405910000001,475.4161495,368.1584578,342.0610198,439.1261673,326.5671042,411.12659809999997,331.2655726,402.2017485,310.8588879,391.8576706,252.89801819999997],"marker":{"color":"#008F7A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-3947.2109704000004,-3019.7441694,-2413.4791579000002,-1345.1042708999998,-856.5462408999999,-1374.5767375,-1669.4366954000002,-1261.545464,-1779.8771847,-1310.9384095,-1955.0366546,-2376.6119196],"marker":{"color":"#FF8C00"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-2943.0449991,-3751.6665926,-3084.7066899,-1913.4967084,-423.5974064,-1373.4115256,-1913.6077577,-1836.0015484,-2513.5170549,-1575.8352766,-1965.2897682999999,-1925.4844912],"marker":{"color":"#FFC300"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-5322.9933725,-7853.7926146,-5145.7048563,-1777.4029855,-1296.7519694,-1188.4353186,-2276.0465336,-1669.6486608,-3421.5340601000003,-1402.58178,-3236.5974529,-3879.8623460000003],"marker":{"color":"#FF4D1A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[90.6180829,92.7010233,178.1703287,126.86715269999999,62.910228,86.7142884,53.4824161,74.39593599999999,72.17461039999999,36.4148972,25.2540889,11.6070151],"marker":{"color":"#D9008F"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[318.06934409999997,268.1554476,353.9242012,415.95271110000004,464.7816627,522.0347651,446.8588998,433.90871660000005,573.5322242,297.0072379,258.7784051,199.14421099999998],"marker":{"color":"#7C8BA1"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"scatter","mode":"lines+markers","name":"Total (annualised)","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[208.80110783039996,158.58824026559998,252.25481415120007,320.2611963468,396.15912479639996,409.6341962963999,242.86321621439998,261.4260300828,463.52933018999994,353.4342591636,189.5690358852,111.95171265120001],"line":{"color":"#1e2028","width":2.5,"shape":"spline","smoothing":0.8},"marker":{"color":"#1e2028","size":7},"legendgroup":"Total","legendgrouptitle":{"text":"Total"},"hovertemplate":"%{x}<br>Total annualised: %{y:,.1f} kEUR/MW/yr<extra></extra>","xaxis":"x","yaxis":"y2"}],"bd_80000_4":[{"type":"bar","name":"Act. aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-1329.4689913500001,-1272.09656395,-1072.6354962,-903.34431815,-1637.5339557,-885.5309649999999,-2180.9280201,-1838.2228124500002,-1719.4855751999999,-2811.88442695,-2863.66457305,-1636.00135295],"marker":{"color":"#DDC2FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"Act. aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[6005.538103,4274.16980375,2699.06859835,2447.02962975,3013.2348001,2280.94926945,2459.89208675,2169.42583835,2761.2246321499997,3426.8863907,3579.9234004,3031.9837939500003],"marker":{"color":"#B575FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"FCR Sym.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.0,46.512,0.0,102.4,0.0,0.0,86.192,0.0,0.0,28.96,48.64],"marker":{"color":"#8D2EFF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[1703.4080000000001,521.408,3224.84,7340.375999999999,14120.6,12857.136,7810.12,7545.936,12097.632000000001,8468.288,3333.7120000000004,825.872],"marker":{"color":"#A7F0E4"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4666.584,4642.072,2661.968,5235.2480000000005,8542.967999999999,7677.32,6456.808,5588.728,16027.104000000001,15045.256,7530.2880000000005,4590.24],"marker":{"color":"#00BFA5"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4738.67095415,6808.6938511,8095.28131325,5843.15930785,3147.44489695,3754.93409395,2348.78845305,4115.6232009,7283.80709035,4238.682258700001,4450.19559115,4291.5730537],"marker":{"color":"#2E5BFF"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5649.87641705,5275.14263045,6949.38922455,4097.139060449999,1831.0881880000002,2315.9256956,2694.0406618,4329.5410688,1577.53537445,2134.2257162,3293.1067786,1525.6876696499999],"marker":{"color":"#0C1C73"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[7041.619766049999,6840.9590233,7820.55132595,6892.30655745,4956.8820557,9004.838709849999,5553.81778545,3462.6113441499997,7432.29785475,2617.8385414,2777.30518225,4244.5087575],"marker":{"color":"#5CEAD0"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[61.29549915,81.8455463,114.2862064,107.07095005000001,94.32327395,67.89870295,65.54215400000001,65.21828769999999,114.98533769999999,40.497007100000005,8.46311585,17.35702165],"marker":{"color":"#1B7F5B"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[705.8089926,478.42158559999996,335.07343025,338.5262095,462.97248605000004,363.04035305,430.7478416,330.0888554,404.78581745,331.79730639999997,380.62545945,292.29765779999997],"marker":{"color":"#008F7A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-3654.3867479499995,-2918.8094174999997,-2236.29417275,-1372.35768005,-547.1849263500001,-1340.5711826000002,-1743.46896405,-1277.19961545,-1938.1941806999998,-1317.08158575,-1838.2390863,-2202.500736],"marker":{"color":"#FF8C00"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-3077.5830393,-3749.53315355,-3040.3859734999996,-2064.3463786,-196.42257895,-1397.22900325,-1979.78442425,-1690.7027429000002,-2511.508087,-1545.37863305,-1914.77794725,-1998.0544834500001],"marker":{"color":"#FFC300"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-5390.607958250001,-8139.34943235,-5062.1301651,-1611.66937005,-1188.7305289,-1164.0590016,-2127.76895885,-1596.2471501,-3396.3544598,-1346.51280525,-3171.6968142,-3790.87551245],"marker":{"color":"#FF4D1A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[87.3243058,88.09973465,179.393384,104.892037,60.939270050000005,77.03395485,45.6875188,76.43298125,85.8112,37.0362093,25.23382875,11.48713],"marker":{"color":"#D9008F"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[319.86849010000003,260.19979475,376.12029659999996,415.3416202,450.16359045,511.06225105000004,411.21825945,433.7529396,565.79237545,290.55890285,285.85973275000003,198.91728215],"marker":{"color":"#7C8BA1"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"scatter","mode":"lines+markers","name":"Total (annualised)","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[210.33537349259998,158.2946808306,253.09245566159998,322.4324595047999,398.5577348562,409.4729865396,242.9365487238,261.614138343,465.4252005552,355.32250657979995,190.8635360208,113.41358737859998],"line":{"color":"#1e2028","width":2.5,"shape":"spline","smoothing":0.8},"marker":{"color":"#1e2028","size":7},"legendgroup":"Total","legendgrouptitle":{"text":"Total"},"hovertemplate":"%{x}<br>Total annualised: %{y:,.1f} kEUR/MW/yr<extra></extra>","xaxis":"x","yaxis":"y2"}],"bd_200000_4":[{"type":"bar","name":"Act. aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-1372.0789345,-1146.87712586,-1034.09688822,-959.23930564,-1581.1649738200001,-899.21221984,-2184.2157276400003,-1795.52332096,-1751.2703306600001,-2805.05635136,-2847.1579818600003,-1636.0261979200002],"marker":{"color":"#DDC2FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"Act. aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5937.730191539999,4217.6541663,2569.88735034,2588.14033632,3024.05450512,2144.06243816,2441.2805177600003,2108.50537522,2703.19408382,3458.22565894,3592.63726488,3086.2302918200003],"marker":{"color":"#B575FF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"FCR Sym.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.0,47.54560000000001,0.0,64.0,0.0,39.52,54.668800000000005,0.0,0.0,0.0,48.8],"marker":{"color":"#8D2EFF"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Down Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[1874.0511999999999,503.152,3224.9471999999996,7286.7168,14110.8608,13075.1392,7790.304,7604.928000000001,11983.4624,8542.0032,3327.2496,833.6624],"marker":{"color":"#A7F0E4"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"aFRR Up Cap.","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4612.5776000000005,4486.3632,2420.3776000000003,5283.1904,8518.7488,7281.5488000000005,6441.3856000000005,5274.831999999999,16115.641599999999,15000.047199999999,7602.1288,4683.1392],"marker":{"color":"#00BFA5"},"legendgroup":"Ancillary Services","legendgrouptitle":{"text":"Ancillary Services"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[4918.35985904,6935.37478612,7909.4836347,6195.2745269199995,3064.5573937000004,3804.1814762,2317.88333608,4354.162449660001,7383.92951852,4328.5388931200005,4317.09262662,4175.8271031799995],"marker":{"color":"#2E5BFF"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5480.3877897,5179.27800444,7214.35551202,3708.63314684,1931.46309288,2514.3672033800003,2697.5434063400003,4775.357098320001,1537.08107506,2174.02727056,3334.5616692,1617.0830508200002],"marker":{"color":"#0C1C73"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[7199.77449154,7022.55380198,7652.787045360001,6602.79863914,4864.50844222,9291.42965462,5422.14935636,3371.74171262,7411.7044499,2595.4847008,2949.34880268,4113.3518225200005],"marker":{"color":"#5CEAD0"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[62.52365012,80.55079322,112.22600732000001,109.36883918,102.19125068,77.39428434,65.57048694,64.20957354000001,114.57524178,40.4970071,8.46311584,16.0855723],"marker":{"color":"#1B7F5B"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Export Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[662.2361885,482.33879086,370.63150262000005,343.34769152,470.37700756,306.34022894000003,424.11695694,310.48001582,378.78567662,302.64686146,395.26778623999996,303.40864497999996],"marker":{"color":"#008F7A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import DA","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-3768.20081708,-2967.49485702,-2033.19560014,-1305.3088413,-437.72096984,-1412.63568706,-1667.3782706400002,-1276.66100452,-1871.3240578599998,-1330.04699332,-1896.0602137,-2350.6221889],"marker":{"color":"#FF8C00"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDA1","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-2963.04262378,-4063.8013551599997,-2976.2353945600003,-1802.99412212,-305.24601642,-1437.40594366,-1787.31273234,-1956.08777028,-2634.17333532,-1574.4767343600001,-2000.08975328,-1689.86069552],"marker":{"color":"#FFC300"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import IDC","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[-5426.7267033,-7961.07762656,-4960.12888922,-1671.38970522,-1166.1147748600001,-1035.62463268,-2139.50425994,-1697.9293806399999,-3351.2807858799997,-1424.89142176,-3168.81980812,-3886.4105996],"marker":{"color":"#FF4D1A"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[87.4760226,87.93576671999999,173.01943641999998,115.00403840000001,61.970159439999996,86.06637174,49.345482080000004,77.27148746,68.24822718,35.604106980000005,25.93971654,11.47574584],"marker":{"color":"#D9008F"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"bar","name":"WS Import Churn No Trade","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[352.29552092,282.60523542,365.32657384,396.39575978,500.01624946000004,497.04369610000003,417.39294462,457.7446289,576.7623300800001,306.34339492,261.99062404,196.82108327999998],"marker":{"color":"#7C8BA1"},"legendgroup":"Wholesale Energy","legendgrouptitle":{"text":"Wholesale Energy"},"hovertemplate":"%{x}<br>%{fullData.name}: %{y:,.0f} \u20ac/MW<extra></extra>","xaxis":"x","yaxis":"y"},{"type":"scatter","mode":"lines+markers","name":"Total (annualised)","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[211.8883612236,157.66266696552003,252.68316828576,322.67925844584,398.67001159344005,411.51233844288,243.93697315872,260.73239598168004,463.98403311887995,355.78736151696,190.83062698896003,114.27558279360001],"line":{"color":"#1e2028","width":2.5,"shape":"spline","smoothing":0.8},"marker":{"color":"#1e2028","size":7},"legendgroup":"Total","legendgrouptitle":{"text":"Total"},"hovertemplate":"%{x}<br>Total annualised: %{y:,.1f} kEUR/MW/yr<extra></extra>","xaxis":"x","yaxis":"y2"}]};
+    var currentOvDuration = '2h';
+
+    var CHART_DATA = {
+      'chart-2h': [{"type":"scatter","mode":"lines+markers","name":"Gridcog 10MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[169.8863870148,135.85595415240002,186.7788355692,255.2502982248,324.56227237679997,331.5569421672,197.94848064480001,209.96956032120002,379.05352772520007,290.87627668320005,152.0437034196,92.8891945704],"line":{"color":"#B575FF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#B575FF","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 10MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 20MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[172.3133091534,136.9028105076,191.07262750980001,259.684022457,326.68686600060005,330.71782689839995,200.38406001600003,211.78131726719997,380.7295659678,295.20495134399994,153.83781724859998,92.496132468],"line":{"color":"#8D2EFF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#8D2EFF","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 20MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 50MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[171.57042809087997,138.22180966272,188.97230681952,258.7492883568,328.0376427986401,334.9968450672,202.74580020168,215.68807010280003,384.3612351216,298.94433011952003,153.99888172752,93.22059430944002],"line":{"color":"#5A1B99","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#5A1B99","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 50MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Cleanhorizon 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[111.0,130.0,215.0,206.0,301.0,276.0,223.0,245.0,360.0,347.0,209.0,203.0],"line":{"color":"#F76DCA","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#F76DCA","symbol":"circle"},"connectgaps":false,"legendgroup":"Cleanhorizon","showlegend":false,"hovertemplate":"%{x}<br>Cleanhorizon 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Enspired 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[null,null,null,null,346.0,326.0,220.0,237.0,342.0,265.0,143.0,108.0],"line":{"color":"#FF8A5C","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#FF8A5C","symbol":"circle"},"connectgaps":false,"legendgroup":"Enspired","showlegend":false,"hovertemplate":"%{x}<br>Enspired 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP_Delta 2h 20 MW","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[189.23388,148.34124,238.68468,286.73256000000003,371.49264,339.78312,218.1828,246.96612,391.69428,307.94676,165.4578,113.5404],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"circle"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP_Delta 2h 20 MW: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP_Delta 2h 50 MW","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[159.75612,128.44596,209.95068,256.79784,326.367,301.70604,196.74156,221.82672,352.09896000000003,276.02352,146.41212000000002,96.5088],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"circle"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP_Delta 2h 50 MW: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Modo 2h 50 MW","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[157.10000000000002,140.89999999999998,190.9,242.0,295.4,286.99999999999994,210.5,223.8,355.1000000000001,297.5,168.1,106.5],"line":{"color":"#D9008F","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#D9008F","symbol":"circle"},"connectgaps":false,"legendgroup":"Modo","showlegend":false,"hovertemplate":"%{x}<br>Modo 2h 50 MW: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"RWTH_Aachen 2h 1 MW","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[225.6011148827948,168.95116682391532,259.2863493261752,299.37978659534775,376.8708288751822,334.63591193139763,217.177050149084,228.53440768126904,398.6714425922828,319.16199900034604,176.8182301686482,118.03365024442972],"line":{"color":"#FF4D1A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#FF4D1A","symbol":"circle"},"connectgaps":false,"legendgroup":"RWTH Aachen","showlegend":false,"hovertemplate":"%{x}<br>RWTH_Aachen 2h 1 MW: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Suena 2h 10 MW","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[259.2,222.0,258.0,338.4,421.2,379.2,230.4,250.8,352.8,295.2,208.8,135.6],"line":{"color":"#00BFA5","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#00BFA5","symbol":"circle"},"connectgaps":false,"legendgroup":"Suena","showlegend":false,"hovertemplate":"%{x}<br>Suena 2h 10 MW: %{y:,.1f} kEUR/MW/yr<extra></extra>"}],
+      'chart-4h': [{"type":"scatter","mode":"lines+markers","name":"Gridcog 10MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[208.80110783039996,158.58824026559998,252.25481415120007,320.2611963468,396.15912479639996,409.6341962963999,242.86321621439998,261.4260300828,463.52933018999994,353.4342591636,189.5690358852,111.95171265120001],"line":{"color":"#B575FF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#B575FF","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 10MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 20MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[210.33537349259998,158.2946808306,253.09245566159998,322.4324595047999,398.5577348562,409.4729865396,242.9365487238,261.614138343,465.4252005552,355.32250657979995,190.8635360208,113.41358737859998],"line":{"color":"#8D2EFF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#8D2EFF","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 20MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 50MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[211.8883612236,157.66266696552003,252.68316828576,322.67925844584,398.67001159344005,411.51233844288,243.93697315872,260.73239598168004,463.98403311887995,355.78736151696,190.83062698896003,114.27558279360001],"line":{"color":"#5A1B99","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#5A1B99","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 50MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Cleanhorizon 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[159.0,170.0,262.0,253.0,359.0,324.0,291.0,300.0,398.0,424.0,265.0,255.0],"line":{"color":"#F76DCA","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#F76DCA","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Cleanhorizon","showlegend":false,"hovertemplate":"%{x}<br>Cleanhorizon 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP_Delta 4h 20 MW","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[219.08592,167.19755999999998,277.04448,326.32176,417.49404,384.44496,247.48176,283.61256000000003,431.76336,336.32172,191.19636,130.66428000000002],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP_Delta 4h 20 MW: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP_Delta 4h 50 MW","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[190.63896,147.65279999999998,250.99668,302.8236,387.84528,358.50492,230.88972,267.98568,397.48824,305.79192,173.98896,116.0286],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP_Delta 4h 50 MW: %{y:,.1f} kEUR/MW/yr<extra></extra>"}],
+      'chart-ws': [{"type":"scatter","mode":"lines+markers","name":"Gridcog 10 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[33.95152732079998,11.458061974800007,84.627631296,93.4541115072,63.712756025999994,79.5251624304,38.43248331839999,53.276129647199994,65.4841068696,21.740149075199994,14.022198594,0.6956738099999986],"line":{"color":"#B575FF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#B575FF","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 10 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 20 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[35.085854036399994,7.066361118600005,82.62103101599999,89.81153368619998,65.5644382998,85.00498819500001,38.5613383824,51.419285366400004,65.4683477136,18.972518546399996,13.1671156962,-0.44608237799999984],"line":{"color":"#8D2EFF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#8D2EFF","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 20 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 10 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[78.29153249519999,63.33695120399999,164.52729533400003,154.1185598832,110.02091775720002,151.8050479956,67.6724479344,101.07523049640001,115.3756640316,65.18626796999999,50.26899754920001,30.532204433999993],"line":{"color":"#B575FF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#B575FF","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 10 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 20 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[77.78264015279997,60.30804195299999,162.37541843580001,153.00074776559998,108.85770872340001,146.3144948862,68.38584392399999,98.9894300322,115.4274998718,65.7799550148,51.5529100926,31.084774086600003],"line":{"color":"#8D2EFF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#8D2EFF","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 20 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 50 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[31.124742120000004,7.6154723059200045,84.67635432792,91.83333331104,66.00314763287999,82.34241830975999,37.53660522335999,53.53327631592001,69.59771466528001,22.61406267768,13.41224558424,0.5879578257600001],"line":{"color":"#5A1B99","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#5A1B99","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 50 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 50 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[79.26100053911999,60.93916008024002,165.93923794032,152.29355967767998,109.03202201784,152.29387982304002,69.59768047728,101.76346573056,115.37170008096,65.444725026,50.73233479272001,30.085914466800002],"line":{"color":"#5A1B99","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#5A1B99","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 50 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP Delta 20 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[55.24944000000001,47.809439999999995,92.38368,104.52048,110.66219999999998,103.75416,67.61604,75.14016000000001,95.13912,61.23912000000001,32.65536,23.20248],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"circle"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP Delta 20 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP Delta 50 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[65.28960000000001,50.4234,99.40848,104.00376,114.14688,105.79392,74.511,77.46492,102.13067999999998,70.98324,41.45604,28.771200000000004],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"circle"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP Delta 50 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP Delta 20 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[100.51728,78.50280000000001,162.6618,165.8028,182.54232,169.3872,112.52244000000002,127.08684,152.08463999999998,103.7664,62.141760000000005,44.39736],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP Delta 20 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP Delta 50 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[99.53328,82.0152,161.13263999999998,166.9254,191.50512,168.95952,111.49367999999998,136.93896,153.83772000000002,115.6836,73.995,49.74024],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP Delta 50 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Modo 50 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[38.0,40.4,50.7,47.4,23.2,18.7,15.1,16.799999999999997,33.1,19.3,16.599999999999998,13.6],"line":{"color":"#D9008F","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#D9008F","symbol":"circle"},"connectgaps":false,"legendgroup":"Modo","showlegend":false,"hovertemplate":"%{x}<br>Modo 50 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"}],
+      'chart-an': [{"type":"scatter","mode":"lines+markers","name":"Gridcog 10 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[135.93485969399998,124.3978921776,102.1512042732,161.79618671759997,260.84951635079995,252.0317797368,159.51599732640003,156.693430674,313.5694208556,269.1361276079999,138.02150482559995,92.19352076039999],"line":{"color":"#B575FF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#B575FF","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 10 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 20 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[137.22745511700003,129.83644938900002,108.4515964938,169.8724887708,261.1224277008,245.7128387034,161.82272163360003,160.36203190080002,315.26121825420006,276.23243279760004,140.67070155239998,92.94221484599998],"line":{"color":"#8D2EFF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#8D2EFF","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 20 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 10 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[130.5095753352,95.25128906159999,87.72751881720001,166.14263646359998,286.1382070392,257.8291483008,175.19076828000001,160.35079958639997,348.15366615840003,288.2479911936,139.30003833600003,81.41950821719999],"line":{"color":"#B575FF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#B575FF","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 10 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 20 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[132.55273333979997,97.9866388776,90.71703722580001,169.43171173919998,289.70002613279996,263.1584916534,174.5507047998,162.62470831080003,349.9977006834,289.542551565,139.3106259282,82.328813292],"line":{"color":"#8D2EFF","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#8D2EFF","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 20 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 50 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[140.44568597087996,130.6063373568,104.2959524916,166.91595504576003,262.03449516576,252.65442675744,165.20919497832,162.15479378688002,314.76352045632,276.33026744184,140.58663614328003,92.63263648368],"line":{"color":"#5A1B99","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#5A1B99","symbol":"circle"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 50 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Gridcog 50 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[132.62736068448,96.72350688528,86.74393034544,170.38569876815998,289.63798957560005,259.21845861983996,174.33929268144,158.96893025111999,348.61233303792,290.34263649096005,140.09829219624,84.1896683268],"line":{"color":"#5A1B99","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#5A1B99","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"%{x}<br>Gridcog 50 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP Delta 20 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[133.98444,100.53192,146.30088,182.21196,260.83056,236.02896,150.56676,171.82608,296.55516000000006,246.70776000000004,132.80244,90.33804],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"circle"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP Delta 20 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP Delta 50 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[94.46652,78.02256,110.54232,152.79396,212.22012,195.91212,122.23056,144.36192,249.96816,205.04016,104.95596,67.7376],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"circle"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP Delta 50 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP Delta 20 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[118.56864,88.69476,114.3828,160.51884,234.95184,215.05788,134.95932,156.52584000000002,279.67872,232.55532,129.05436,86.26692],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP Delta 20 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"LCP Delta 50 MW 4h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[91.10556,65.6376,89.86404,135.89808000000002,196.34028,189.54552,119.39604,131.04672,243.6504,190.10832,99.99384,66.28824],"line":{"color":"#008F7A","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#008F7A","symbol":"triangle-up"},"connectgaps":false,"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"%{x}<br>LCP Delta 50 MW 4h: %{y:,.1f} kEUR/MW/yr<extra></extra>"},{"type":"scatter","mode":"lines+markers","name":"Modo 50 MW 2h","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[119.1,100.5,140.20000000000002,194.6,272.2,268.29999999999995,195.4,207.0,322.0,278.2,151.5,92.9],"line":{"color":"#D9008F","dash":"solid","width":2,"shape":"spline","smoothing":0.8},"marker":{"size":7,"color":"#D9008F","symbol":"circle"},"connectgaps":false,"legendgroup":"Modo","showlegend":false,"hovertemplate":"%{x}<br>Modo 50 MW 2h: %{y:,.1f} kEUR/MW/yr<extra></extra>"}]
+    };
+    var AVG_DATA = {
+      '2025':   [{"type":"bar","name":"Cleanhorizon 4h","x":["Cleanhorizon 4h"],"y":[288.33],"text":["288"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#F76DCA","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Cleanhorizon","showlegend":false,"hovertemplate":"Cleanhorizon 4h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"LCP_Delta 4h 20 MW","x":["LCP_Delta 4h 20 MW"],"y":[284.39],"text":["284"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#008F7A","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"LCP_Delta 4h 20 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 50MW 4h","x":["Gridcog 50MW 4h"],"y":[282.05],"text":["282"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#5A1B99","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 50MW 4h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 20MW 4h","x":["Gridcog 20MW 4h"],"y":[281.81],"text":["282"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#8D2EFF","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 20MW 4h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 10MW 4h","x":["Gridcog 10MW 4h"],"y":[280.71],"text":["281"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#B575FF","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 10MW 4h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Suena 2h 10 MW","x":["Suena 2h 10 MW"],"y":[279.3],"text":["279"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#00BFA5","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Suena","showlegend":false,"hovertemplate":"Suena 2h 10 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"LCP_Delta 4h 50 MW","x":["LCP_Delta 4h 50 MW"],"y":[260.89],"text":["261"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#008F7A","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"LCP_Delta 4h 50 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"RWTH_Aachen 2h 1 MW","x":["RWTH_Aachen 2h 1 MW"],"y":[260.26],"text":["260"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#FF4D1A","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"RWTH Aachen","showlegend":false,"hovertemplate":"RWTH_Aachen 2h 1 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"LCP_Delta 2h 20 MW","x":["LCP_Delta 2h 20 MW"],"y":[251.5],"text":["252"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#008F7A","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"LCP_Delta 2h 20 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Enspired 2h","x":["Enspired 2h"],"y":[248.38],"text":["248"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#FF8A5C","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Enspired","showlegend":false,"hovertemplate":"Enspired 2h<br>%{y:,.1f} kEUR/MW/yr (8 months avg)<extra></extra>"},{"type":"bar","name":"Cleanhorizon 2h","x":["Cleanhorizon 2h"],"y":[235.5],"text":["236"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#F76DCA","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Cleanhorizon","showlegend":false,"hovertemplate":"Cleanhorizon 2h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 50MW 2h","x":["Gridcog 50MW 2h"],"y":[230.79],"text":["231"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#5A1B99","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 50MW 2h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 20MW 2h","x":["Gridcog 20MW 2h"],"y":[229.32],"text":["229"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#8D2EFF","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 20MW 2h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 10MW 2h","x":["Gridcog 10MW 2h"],"y":[227.22],"text":["227"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#B575FF","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 10MW 2h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Modo 2h 50 MW","x":["Modo 2h 50 MW"],"y":[222.9],"text":["223"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#D9008F","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Modo","showlegend":false,"hovertemplate":"Modo 2h 50 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"LCP_Delta 2h 50 MW","x":["LCP_Delta 2h 50 MW"],"y":[222.72],"text":["223"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#008F7A","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"LCP_Delta 2h 50 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"}],
+      'past12': [{"type":"bar","name":"Cleanhorizon 4h","x":["Cleanhorizon 4h"],"y":[288.33],"text":["288"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#F76DCA","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Cleanhorizon","showlegend":false,"hovertemplate":"Cleanhorizon 4h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"LCP_Delta 4h 20 MW","x":["LCP_Delta 4h 20 MW"],"y":[284.39],"text":["284"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#008F7A","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"LCP_Delta 4h 20 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 50MW 4h","x":["Gridcog 50MW 4h"],"y":[282.05],"text":["282"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#5A1B99","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 50MW 4h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 20MW 4h","x":["Gridcog 20MW 4h"],"y":[281.81],"text":["282"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#8D2EFF","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 20MW 4h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 10MW 4h","x":["Gridcog 10MW 4h"],"y":[280.71],"text":["281"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#B575FF","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 10MW 4h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Suena 2h 10 MW","x":["Suena 2h 10 MW"],"y":[279.3],"text":["279"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#00BFA5","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Suena","showlegend":false,"hovertemplate":"Suena 2h 10 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"LCP_Delta 4h 50 MW","x":["LCP_Delta 4h 50 MW"],"y":[260.89],"text":["261"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#008F7A","pattern":{"shape":".","size":5,"solidity":0.7},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"LCP_Delta 4h 50 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"RWTH_Aachen 2h 1 MW","x":["RWTH_Aachen 2h 1 MW"],"y":[260.26],"text":["260"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#FF4D1A","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"RWTH Aachen","showlegend":false,"hovertemplate":"RWTH_Aachen 2h 1 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"LCP_Delta 2h 20 MW","x":["LCP_Delta 2h 20 MW"],"y":[251.5],"text":["252"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#008F7A","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"LCP_Delta 2h 20 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Enspired 2h","x":["Enspired 2h"],"y":[248.38],"text":["248"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#FF8A5C","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Enspired","showlegend":false,"hovertemplate":"Enspired 2h<br>%{y:,.1f} kEUR/MW/yr (8 months avg)<extra></extra>"},{"type":"bar","name":"Cleanhorizon 2h","x":["Cleanhorizon 2h"],"y":[235.5],"text":["236"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#F76DCA","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Cleanhorizon","showlegend":false,"hovertemplate":"Cleanhorizon 2h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 50MW 2h","x":["Gridcog 50MW 2h"],"y":[230.79],"text":["231"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#5A1B99","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 50MW 2h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 20MW 2h","x":["Gridcog 20MW 2h"],"y":[229.32],"text":["229"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#8D2EFF","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 20MW 2h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Gridcog 10MW 2h","x":["Gridcog 10MW 2h"],"y":[227.22],"text":["227"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#B575FF","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Gridcog","showlegend":false,"hovertemplate":"Gridcog 10MW 2h<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"Modo 2h 50 MW","x":["Modo 2h 50 MW"],"y":[222.9],"text":["223"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#D9008F","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"Modo","showlegend":false,"hovertemplate":"Modo 2h 50 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"},{"type":"bar","name":"LCP_Delta 2h 50 MW","x":["LCP_Delta 2h 50 MW"],"y":[222.72],"text":["223"],"textposition":"outside","textfont":{"size":10,"color":"#333"},"cliponaxis":false,"marker":{"color":"#008F7A","pattern":{"shape":""},"line":{"width":0.8,"color":"#fff"}},"legendgroup":"LCP Delta","showlegend":false,"hovertemplate":"LCP_Delta 2h 50 MW<br>%{y:,.1f} kEUR/MW/yr (12 months avg)<extra></extra>"}]
+    };
+    var inited           = {};
+    var currentAvgPeriod = '2025';
+
+    function applyDefaultHidden(cid) {
+      var sid = cid.replace('chart-', 'sidebar-');
+      var sb  = document.getElementById(sid);
+      if (!sb) return;
+      sb.querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+        if (!cb.checked) {
+          if (cid === 'chart-avg') toggleBar(cb, cid);
+          else toggleTrace(cb, cid);
+        }
+      });
+    }
+
+    function initChart(cid) {
+      if (inited[cid]) return;
+      var data = (cid === 'chart-avg') ? AVG_DATA[currentAvgPeriod] : CHART_DATA[cid];
+      var lay  = (cid === 'chart-avg') ? avgLayout : layout;
+      Plotly.newPlot(cid, data, lay, config);
+      inited[cid] = true;
+      applyDefaultHidden(cid);
+    }
+
+    // Init overview context chart; hide 20MW and 50MW by default
+    Plotly.newPlot('chart-ov', OV_DATA['2h'], ovLayout, config).then(function() {
+      document.querySelectorAll('.ov-size-checks input[type=checkbox]').forEach(function(cb) {
+        if (!cb.checked) toggleOvSize(cb.dataset.mw, cb);
+      });
+    });
+
+    // Init breakdown chart
+    Plotly.newPlot('chart-breakdown', BD_DATA['bd_20000_2'], bdLayout, config)
+        .then(function() { alignBreakdownZeros('chart-breakdown'); });
+
+    // Init charts visible on page load
+    initChart('chart-2h');
+    initChart('chart-avg');
+
+    function showTab(tabId, chartId, sidebarId, btn) {
+      // Only affect sidebars inside .body (not sidebar-avg)
+      document.querySelectorAll('.body .sidebar').forEach(function(el) { el.classList.remove('active'); });
+      document.querySelectorAll('.tab-panel').forEach(function(el) { el.classList.remove('active'); });
+      document.querySelectorAll('.tab-btn').forEach(function(el)   { el.classList.remove('active'); });
+      document.getElementById(tabId).classList.add('active');
+      document.getElementById(sidebarId).classList.add('active');
+      btn.classList.add('active');
+      if (!inited[chartId]) {
+        initChart(chartId);
+      } else {
+        Plotly.relayout(chartId, {});
+      }
+    }
+
+    // ── line chart: toggle one trace (legendonly) ─────────────────────────────
+    function toggleTrace(cb, chartId) {
+      if (!inited[chartId]) return;
+      var name = cb.dataset.label;
+      var vis  = cb.checked ? true : 'legendonly';
+      var el   = document.getElementById(chartId);
+      var idxs = [];
+      el.data.forEach(function(t, i) { if (t.name === name) idxs.push(i); });
+      if (idxs.length) Plotly.restyle(chartId, {visible: vis}, idxs);
+    }
+
+    function setGrp(e, btn, chartId, checked) {
+      e.stopPropagation();
+      btn.closest('.grp').querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+        cb.checked = checked; toggleTrace(cb, chartId);
+      });
+    }
+
+    // ── bar chart: toggle one bar (visible true/false) ────────────────────────
+    function toggleBar(cb, chartId) {
+      if (!inited[chartId]) return;
+      var name = cb.dataset.label;
+      var vis  = cb.checked;
+      var el   = document.getElementById(chartId);
+      var idxs = [];
+      el.data.forEach(function(t, i) { if (t.name === name) idxs.push(i); });
+      if (idxs.length) Plotly.restyle(chartId, {visible: vis}, idxs);
+    }
+
+    function setGrpBar(e, btn, chartId, checked) {
+      e.stopPropagation();
+      btn.closest('.grp').querySelectorAll('input[type=checkbox]').forEach(function(cb) {
+        cb.checked = checked; toggleBar(cb, chartId);
+      });
+    }
+
+    // ── period switcher ───────────────────────────────────────────────────────
+    function switchAvgPeriod(period) {
+      currentAvgPeriod = period;
+      Plotly.react('chart-avg', AVG_DATA[period], avgLayout, config);
+      document.querySelectorAll('#sidebar-avg input[type=checkbox]').forEach(function(cb) {
+        if (!cb.checked) toggleBar(cb, 'chart-avg');
+      });
+    }
+
+    // ── breakdown chart ───────────────────────────────────────────────────────
+    function switchBreakdown(key) {
+      // Use newPlot (not react) so autorange is fully recalculated for each scenario
+      Plotly.newPlot('chart-breakdown', BD_DATA[key], bdLayout, config)
+          .then(function() { alignBreakdownZeros('chart-breakdown'); });
+    }
+    
+    var MS_DATA = {"bd_20000_2":[{"type":"bar","name":"FCR  \u2014  0.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.11,0.23,0.16,0.38,0.0,0.0,0.35,0.0,0.0,0.0,0.19],"marker":{"color":"#8D2EFF"},"hovertemplate":"FCR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"aFRR  \u2014  77.4% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[78.8,82.97,54.46,63.23,79.98,75.42,80.38,74.28,81.79,92.53,82.27,82.58],"marker":{"color":"#B575FF"},"hovertemplate":"aFRR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"DA  \u2014  6.0% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,5.8,14.86,14.49,3.48,0.2,0.0,8.09,6.33,0.29,7.9,10.04],"marker":{"color":"#2E5BFF"},"hovertemplate":"DA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDA  \u2014  3.7% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[10.2,1.19,11.12,4.99,3.08,0.0,2.34,6.87,0.0,0.69,3.58,0.0],"marker":{"color":"#0C1C73"},"hovertemplate":"IDA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDC  \u2014  5.8% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.0,10.15,10.3,6.89,19.67,10.42,3.74,6.87,2.12,0.0,0.0],"marker":{"color":"#5CEAD0"},"hovertemplate":"IDC: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"Churn  \u2014  7.0% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[11.01,9.92,9.17,6.84,6.18,4.71,6.85,6.67,5.01,4.37,6.24,7.18],"marker":{"color":"#7C8BA1"},"hovertemplate":"Churn: %{y:.1f}%<extra></extra>"}],"bd_40000_2":[{"type":"bar","name":"FCR  \u2014  0.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.12,0.24,0.13,0.24,0.07,0.08,0.06,0.0,0.0,0.0,0.16],"marker":{"color":"#8D2EFF"},"hovertemplate":"FCR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"aFRR  \u2014  77.8% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[78.48,83.52,56.52,65.28,79.69,73.85,80.3,75.66,81.62,93.14,83.26,82.87],"marker":{"color":"#B575FF"},"hovertemplate":"aFRR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"DA  \u2014  5.5% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,7.23,11.6,12.9,2.76,0.62,0.0,6.84,5.59,0.65,7.17,10.42],"marker":{"color":"#2E5BFF"},"hovertemplate":"DA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDA  \u2014  3.5% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[10.09,0.0,10.58,5.79,3.66,0.0,2.05,6.48,0.0,0.0,3.51,0.0],"marker":{"color":"#0C1C73"},"hovertemplate":"IDA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDC  \u2014  6.2% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.37,0.0,12.18,9.5,7.75,20.72,10.39,4.19,7.65,2.06,0.0,0.0],"marker":{"color":"#5CEAD0"},"hovertemplate":"IDC: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"Churn  \u2014  6.8% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[11.06,9.13,8.88,6.4,5.9,4.75,7.18,6.76,5.14,4.15,6.06,6.55],"marker":{"color":"#7C8BA1"},"hovertemplate":"Churn: %{y:.1f}%<extra></extra>"}],"bd_100000_2":[{"type":"bar","name":"FCR  \u2014  0.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.0,0.0,0.0,0.27,0.0,0.0,0.06,0.0,0.13,0.0,0.29],"marker":{"color":"#8D2EFF"},"hovertemplate":"FCR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"aFRR  \u2014  78.0% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[80.09,84.66,55.19,64.51,79.61,75.42,81.49,75.12,81.54,92.3,82.25,83.5],"marker":{"color":"#B575FF"},"hovertemplate":"aFRR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"DA  \u2014  5.7% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,5.09,14.31,12.52,4.12,0.1,0.32,6.44,6.42,1.36,8.5,9.46],"marker":{"color":"#2E5BFF"},"hovertemplate":"DA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDA  \u2014  3.4% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[9.27,0.0,12.79,5.29,3.04,0.01,1.11,5.85,0.0,0.09,3.15,0.0],"marker":{"color":"#0C1C73"},"hovertemplate":"IDA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDC  \u2014  5.8% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.0,8.27,10.57,7.16,19.47,9.94,5.59,7.31,1.67,0.0,0.0],"marker":{"color":"#5CEAD0"},"hovertemplate":"IDC: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"Churn  \u2014  7.0% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[10.64,10.25,9.44,7.11,5.8,5.0,7.14,6.94,4.73,4.45,6.09,6.75],"marker":{"color":"#7C8BA1"},"hovertemplate":"Churn: %{y:.1f}%<extra></extra>"}],"bd_40000_4":[{"type":"bar","name":"FCR  \u2014  0.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.14,0.22,0.0,0.27,0.0,0.0,0.44,0.0,0.0,0.0,0.23],"marker":{"color":"#8D2EFF"},"hovertemplate":"FCR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"aFRR  \u2014  64.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[62.5,55.5,34.56,51.88,71.96,62.94,72.14,60.9,73.28,81.56,72.06,70.02],"marker":{"color":"#B575FF"},"hovertemplate":"aFRR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"DA  \u2014  14.4% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[5.1,28.32,27.09,18.36,7.6,7.34,3.35,14.58,13.83,9.91,15.48,21.42],"marker":{"color":"#2E5BFF"},"hovertemplate":"DA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDA  \u2014  7.2% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[14.74,9.63,20.16,7.61,5.14,2.99,4.17,11.76,0.0,2.31,8.21,0.0],"marker":{"color":"#0C1C73"},"hovertemplate":"IDA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDC  \u2014  9.9% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[10.79,0.0,13.15,18.45,11.8,23.77,15.52,8.17,9.95,3.89,0.0,3.35],"marker":{"color":"#5CEAD0"},"hovertemplate":"IDC: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"Churn  \u2014  4.3% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[6.86,6.4,4.83,3.7,3.23,2.96,4.83,4.14,2.94,2.33,4.25,4.98],"marker":{"color":"#7C8BA1"},"hovertemplate":"Churn: %{y:.1f}%<extra></extra>"}],"bd_80000_4":[{"type":"bar","name":"FCR  \u2014  0.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.0,0.22,0.0,0.31,0.0,0.0,0.4,0.0,0.0,0.18,0.49],"marker":{"color":"#8D2EFF"},"hovertemplate":"FCR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"aFRR  \u2014  64.4% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[63.02,56.35,35.62,52.55,72.38,64.27,71.85,61.77,73.43,81.49,71.05,68.65],"marker":{"color":"#B575FF"},"hovertemplate":"aFRR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"DA  \u2014  14.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[6.19,26.85,27.78,16.64,7.83,7.08,2.99,13.02,13.46,9.87,16.02,21.05],"marker":{"color":"#2E5BFF"},"hovertemplate":"DA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDA  \u2014  7.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[14.68,10.53,18.53,7.57,4.92,2.69,3.53,12.1,0.0,1.99,8.46,0.0],"marker":{"color":"#0C1C73"},"hovertemplate":"IDA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDC  \u2014  10.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[9.42,0.0,13.08,19.65,11.35,22.98,16.92,8.56,10.16,4.29,0.0,4.57],"marker":{"color":"#5CEAD0"},"hovertemplate":"IDC: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"Churn  \u2014  4.3% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[6.7,6.27,4.76,3.59,3.22,2.99,4.71,4.15,2.95,2.36,4.3,5.24],"marker":{"color":"#7C8BA1"},"hovertemplate":"Churn: %{y:.1f}%<extra></extra>"}],"bd_200000_4":[{"type":"bar","name":"FCR  \u2014  0.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[0.0,0.0,0.23,0.0,0.19,0.0,0.19,0.25,0.0,0.0,0.0,0.51],"marker":{"color":"#8D2EFF"},"hovertemplate":"FCR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"aFRR  \u2014  64.5% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[62.59,57.26,34.1,52.8,72.46,62.99,71.27,60.72,73.06,81.61,72.42,72.61],"marker":{"color":"#B575FF"},"hovertemplate":"aFRR: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"DA  \u2014  14.3% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[6.51,28.19,27.91,18.19,7.91,6.97,3.2,14.16,13.86,10.11,15.02,19.02],"marker":{"color":"#2E5BFF"},"hovertemplate":"DA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDA  \u2014  7.1% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[14.26,7.92,20.13,7.09,4.89,3.14,4.48,12.98,0.0,2.02,8.28,0.0],"marker":{"color":"#0C1C73"},"hovertemplate":"IDA: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"IDC  \u2014  9.7% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[10.04,0.0,12.79,18.34,11.13,24.07,16.15,7.7,10.21,3.95,0.0,2.37],"marker":{"color":"#5CEAD0"},"hovertemplate":"IDC: %{y:.1f}%<extra></extra>"},{"type":"bar","name":"Churn  \u2014  4.3% avg","x":["2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"y":[6.6,6.63,4.85,3.59,3.42,2.82,4.7,4.19,2.86,2.31,4.29,5.5],"marker":{"color":"#7C8BA1"},"hovertemplate":"Churn: %{y:.1f}%<extra></extra>"}]};
+    var msLayout = {
+      barmode: 'stack',
+      xaxis: { title: '', tickangle: -45, showgrid: false, automargin: true },
+      yaxis: {
+        title: 'Share of total monthly revenue (%)',
+        range: [0, 100], ticksuffix: '%',
+        showgrid: true, gridcolor: '#eee', zeroline: false
+      },
+      plot_bgcolor: 'white', paper_bgcolor: 'white',
+      font: { family: 'Inter, Arial, sans-serif', size: 12 },
+      margin: { l: 80, r: 20, t: 10, b: 80 },
+      legend: { orientation: 'h', y: -0.25, x: 0 },
+      hovermode: 'x unified',
+    };
+    function switchMarketShare(key) {
+      Plotly.newPlot('chart-ms', MS_DATA[key], msLayout, config);
+    }
+    Plotly.newPlot('chart-ms', MS_DATA['bd_20000_2'], msLayout, config);
+
+    function alignBreakdownZeros(cid) {
+      var el = document.getElementById(cid);
+      if (!el || !el._fullLayout) return;
+      var r1   = el._fullLayout.yaxis.range;
+      var r2   = el._fullLayout.yaxis2.range;
+      var y1mi = r1[0], y1ma = r1[1];
+      var y2mi = r2[0], y2ma = r2[1];
+      var fr1  = (y1mi < 0) ? -y1mi / (y1ma - y1mi) : 0;
+      var fr2  = (y2mi < 0) ? -y2mi / (y2ma - y2mi) : 0;
+      var fr   = Math.max(fr1, fr2);
+      if (fr <= 0 || fr >= 1) return;
+      var sp1  = Math.max(Math.max(y1ma, 0.01) / (1 - fr), Math.abs(y1mi) / fr);
+      var sp2  = Math.max(Math.max(y2ma, 0.01) / (1 - fr), Math.abs(y2mi) / fr);
+      Plotly.relayout(cid, {
+        'yaxis.range':  [-fr * sp1, (1 - fr) * sp1],
+        'yaxis2.range': [-fr * sp2, (1 - fr) * sp2],
+      });
+    }
+
+    // ── overview duration switch ──────────────────────────────────────────────
+    function switchOvDuration(dur, btn) {
+      currentOvDuration = dur;
+      document.querySelectorAll('.ov-dur-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      Plotly.react('chart-ov', OV_DATA[dur], ovLayout, config);
+      // Re-apply any deselected size checkboxes
+      document.querySelectorAll('.ov-size-checks input[type=checkbox]').forEach(function(cb) {
+        if (!cb.checked) toggleOvSize(cb.dataset.mw, cb);
+      });
+    }
+
+    // ── overview size toggle ──────────────────────────────────────────────────
+    function toggleOvSize(mw, cb) {
+      var groupName = 'Gridcog ' + mw + 'MW';
+      var vis  = cb.checked ? true : 'legendonly';
+      var el   = document.getElementById('chart-ov');
+      var idxs = [];
+      el.data.forEach(function(t, i) { if (t.legendgroup === groupName) idxs.push(i); });
+      if (idxs.length) Plotly.restyle('chart-ov', {visible: vis}, idxs);
+    }
+
+    // ── methodology table toggle ─────────────────────────────────────────────
+    function toggleMeta() {
+      var body   = document.getElementById('meta-body');
+      var label  = document.getElementById('meta-toggle-label');
+      var header = document.getElementById('meta-header');
+      var open   = body.style.display !== 'none';
+      body.style.display  = open ? 'none' : 'block';
+      label.innerHTML     = open ? 'Show details &#9660;' : 'Hide details &#9650;';
+      header.classList.toggle('open', !open);
+    }
+
+    // ── group collapse ────────────────────────────────────────────────────────
+    function toggleGrpCollapse(hdr) {
+      var body  = hdr.nextElementSibling;
+      var arrow = hdr.querySelector('.arrow');
+      var open  = body.style.display !== 'none';
+      body.style.display    = open ? 'none' : '';
+      arrow.style.transform = open ? 'rotate(-90deg)' : '';
+    }
+  </script>
+</body>
+</html>
